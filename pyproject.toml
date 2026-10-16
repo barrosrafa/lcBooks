@@ -1,11 +1,11 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=58"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "lcbooks"
-version = "0.1.0"
-description = "Geração de capítulos, roteiros e ideias visuais a partir de livros em PDF usando LangChain e Gemini"
+version = "0.2.0"
+description = "Transforma PDFs em roteiros e vídeos"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
@@ -14,7 +14,20 @@ dependencies = [
   "langchain-google-genai>=2.0.0",
   "pypdf>=5.0.0",
   "pydantic>=2.7.0",
+  "pydantic-settings>=2.2.0",
+  "eval-type-backport>=0.2.0",
   "python-dotenv>=1.0.0",
+  "Pillow>=10.0.0",
+  "google-cloud-texttospeech>=2.16.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+  "pytest-cov>=5.0.0",
+  "ruff>=0.5.0",
+  "mypy>=1.10.0",
+  "pip-audit>=2.7.0",
 ]
 
 [project.scripts]
@@ -22,3 +35,11 @@ lcbooks = "lcbooks.pipeline:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
