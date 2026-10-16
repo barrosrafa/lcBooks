@@ -1,0 +1,7 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+saida_livro/
+*.pdf
+.DS_Store

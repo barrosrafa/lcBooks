@@ -1,0 +1,41 @@
+# lcBooks
+
+Pipeline em **LangChain + Gemini** para transformar um livro em PDF em capítulos, roteiros de vídeo e ideias de imagens.
+
+## O que faz
+
+- Extrai o texto de um PDF com `pypdf`.
+- Usa Gemini para identificar os limites e títulos dos capítulos.
+- Gera para cada capítulo roteiros de 20 minutos, 3 minutos e 1 minuto.
+- Gera resumo estruturado e 10 ideias visuais por capítulo.
+- Salva JSON individual, JSON completo e Markdown consolidado.
+
+## Instalação
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+cp .env.example .env
+```
+
+Configure `GEMINI_API_KEY` no `.env` e execute:
+
+```bash
+lcbooks caminho/para/livro.pdf --output ./saida_livro --chapters 25
+```
+
+Também é possível executar diretamente:
+
+```bash
+python src/lcbooks/pipeline.py livro.pdf --output ./saida_livro --chapters 25
+```
+
+## Saídas
+
+- `mapa_capitulos.json`
+- `capitulo_01.json` ... `capitulo_25.json`
+- `resultado_completo.json`
+- `roteiros_e_ideias.md`
+
+O PDF precisa conter camada de texto. Para PDF escaneado, aplique OCR antes.
