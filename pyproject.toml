@@ -7,7 +7,7 @@ name = "lcbooks"
 version = "0.1.0"
 description = "Geração de capítulos, roteiros e ideias visuais a partir de livros em PDF usando LangChain e Gemini"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 dependencies = [
   "langchain>=0.3.0",
   "langchain-core>=0.3.0",

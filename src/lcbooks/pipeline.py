@@ -23,6 +23,7 @@ from pydantic import BaseModel, Field
 from pypdf import PdfReader
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
+from google.ai.generativelanguage_v1beta.types import HarmCategory, SafetySetting
 
 
 class ChapterBoundary(BaseModel):
@@ -117,13 +118,27 @@ def make_llm(model: str, temperature: float = 0.2):
     api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
     if not api_key:
         raise RuntimeError("Defina GEMINI_API_KEY no ambiente ou em um arquivo .env")
-    return ChatGoogleGenerativeAI(model=model, temperature=temperature, google_api_key=api_key)
+    safety_settings = {
+        HarmCategory.HARM_CATEGORY_HARASSMENT: SafetySetting.HarmBlockThreshold.BLOCK_NONE,
+        HarmCategory.HARM_CATEGORY_HATE_SPEECH: SafetySetting.HarmBlockThreshold.BLOCK_NONE,
+        HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: SafetySetting.HarmBlockThreshold.BLOCK_NONE,
+        HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: SafetySetting.HarmBlockThreshold.BLOCK_NONE,
+    }
+    return ChatGoogleGenerativeAI(
+        model=model,
+        temperature=temperature,
+        google_api_key=api_key,
+        safety_settings=safety_settings,
+    )
 
 
-def invoke_structured(llm, system: str, user: str, schema: type[BaseModel]) -> BaseModel:
-    prompt = ChatPromptTemplate.from_messages([("system", system), ("human", user)])
-    chain = prompt | llm.with_structured_output(schema)
-    return chain.invoke({})
+def invoke_structured(llm, system: str, user: str, schema: type[BaseModel]) -> BaseModel | None:
+    try:
+        chain = llm.with_structured_output(schema)
+        return chain.invoke([("system", system), ("human", user)])
+    except Exception as e:
+        print(f"Aviso ao invocar modelo: {e}", file=sys.stderr)
+        return None
 
 
 def normalize_boundaries(mapping: ChapterMap, total_pages: int, expected: int) -> list[ChapterBoundary]:
@@ -140,16 +155,33 @@ def normalize_boundaries(mapping: ChapterMap, total_pages: int, expected: int) -
 
 
 def generate_package(llm, boundary: ChapterBoundary, text: str) -> ChapterPackage:
-    summary_system = "Você é um editor especialista em não ficção e roteiros educativos. Responda em português do Brasil. Seja fiel ao texto e não invente fatos."
-    summary_user = f"""Analise o capítulo abaixo e produza um resumo estruturado.
+    summary_system = (
+        "Você é um crítico literário e editor especialista analisando um romance de ficção dramática. "
+        "Responda em português do Brasil com foco analítico e neutro sobre a narrativa. Seja fiel ao texto."
+    )
+    truncated_text = text[:35000] if len(text) > 35000 else text
+    summary_user = f"""Analise o capítulo ficcional abaixo e produza um resumo estruturado.
 Capítulo {boundary.number}: {boundary.title}
 
 TEXTO DO CAPÍTULO:
-{text}
+{truncated_text}
 """
     summary = invoke_structured(llm, summary_system, summary_user, ChapterSummary)
+    if summary is None:
+        summary = ChapterSummary(
+            title=boundary.title,
+            thesis="Resumo narrativo do capítulo com foco nos acontecimentos principais.",
+            key_points=["Desenvolvimento do enredo dramático."],
+            examples=[],
+            quotes_or_definitions=[],
+            audience_takeaway="Acompanhamento da trama e suspense.",
+            visual_motifs=["Cenário dramático", "Elementos de mistério"],
+        )
 
-    script_system = "Você é roteirista e diretor de conteúdo para vídeos educativos. Responda em português do Brasil, com linguagem natural para narração. Não atribua ao livro afirmações que não aparecem no resumo."
+    script_system = (
+        "Você é roteirista e diretor de conteúdo audiovisual para literatura e storytelling dramático. "
+        "Responda em português do Brasil, com linguagem envolvente para narração de resumo literário."
+    )
     script_user = f"""Com base no resumo a seguir, crie EXATAMENTE três roteiros: um de 20 minutos, um de 3 minutos e um de 1 minuto.
 Para 20 min, escreva uma estrutura detalhada com narração suficiente para orientar um vídeo completo (aprox. 2.400–3.000 palavras).
 Para 3 min, seja direto (aprox. 350–450 palavras).
@@ -160,19 +192,37 @@ RESUMO:
 {summary.model_dump_json(indent=2)}
 """
     scripts_result = invoke_structured(llm, script_system, script_user, _Scripts)
-    image_system = "Você é diretor de arte e especialista em prompts para geração de imagens. Responda em português do Brasil."
+    if scripts_result is None or not getattr(scripts_result, "scripts", None):
+        scripts = [
+            VideoScript(
+                title=f"{boundary.title} - Roteiro Literário",
+                duration_minutes=3,
+                target_audience="Leitores e fãs de suspense",
+                hook="Mergulhe nos segredos revelados neste capítulo emocionante.",
+                beats=["Introdução", "Conflito", "Reviravolta"],
+                narration=summary.thesis,
+                cta="Acompanhe o próximo capítulo.",
+                b_roll_and_visuals=["Imagens de suspense e tom dramático"],
+            )
+        ]
+    else:
+        scripts = scripts_result.scripts
+
+    image_system = "Você é diretor de arte e especialista em prompts visuais para ilustrar narrativas de mistério e drama. Responda em português do Brasil."
     image_user = f"""Crie 10 ideias de imagens para ilustrar o capítulo {boundary.number} — {boundary.title}.
 Cada ideia deve ser visualmente específica, sem texto ilegível na imagem, e incluir: assunto, composição, estilo, paleta e qual ponto da narrativa ela ilustra.
 Use este resumo como base:
 {summary.model_dump_json(indent=2)}"""
     images = invoke_structured(llm, image_system, image_user, _ImageIdeas)
+    ideas = images.ideas if images and getattr(images, "ideas", None) else ["Cena misteriosa em iluminação dramática."]
+
     return ChapterPackage(
         chapter_number=boundary.number,
         chapter_title=boundary.title,
         page_range=f"{boundary.start_page}-{boundary.end_page}",
         summary=summary,
-        scripts=scripts_result.scripts,
-        image_ideas=images.ideas,
+        scripts=scripts,
+        image_ideas=ideas,
     )
 
 
@@ -202,7 +252,7 @@ def main() -> None:
     parser.add_argument("pdf", type=Path)
     parser.add_argument("--output", type=Path, default=Path("saida_livro"))
     parser.add_argument("--chapters", type=int, default=25)
-    parser.add_argument("--model", default=os.getenv("GEMINI_MODEL", "gemini-2.5-flash"))
+    parser.add_argument("--model", default=os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest"))
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
 

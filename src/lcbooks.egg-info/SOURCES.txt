@@ -1,0 +1,10 @@
+README.md
+pyproject.toml
+src/lcbooks/__init__.py
+src/lcbooks/pipeline.py
+src/lcbooks.egg-info/PKG-INFO
+src/lcbooks.egg-info/SOURCES.txt
+src/lcbooks.egg-info/dependency_links.txt
+src/lcbooks.egg-info/entry_points.txt
+src/lcbooks.egg-info/requires.txt
+src/lcbooks.egg-info/top_level.txt
